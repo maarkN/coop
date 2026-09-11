@@ -13,17 +13,19 @@ import CollapsibleText from '@/webpages/dashboard/mrt/manual_review_job/v2/compo
 const INLINE_VALUE_MAX_CHARS = 120;
 const COLLAPSED_LINES = 2;
 
-type Props = {
+/**
+ * A label in the investigation and review console views. `parameters` carries
+ * the runtime values an action ran with, keyed by parameter name; omitted or
+ * empty renders the tag exactly as before, so callers without parameters are
+ * unaffected.
+ */
+export default function InvestigationTag({
+  title,
+  parameters,
+}: {
   title: string;
-  /**
-   * Runtime values the action ran with, keyed by parameter name. Omitted or
-   * empty renders the tag exactly as before, so callers that have no
-   * parameters are unaffected.
-   */
   parameters?: Readonly<Record<string, unknown>>;
-};
-
-export default function InvestigationTag({ title, parameters }: Props) {
+}) {
   const entries = Object.entries(parameters ?? {});
 
   return (
@@ -75,7 +77,10 @@ function formatParameterValue(value: unknown): string {
     return value.join(', ');
   }
   if (typeof value === 'object') {
-    return JSON.stringify(value);
+    // Shouldn't occur: validated parameters are scalars or arrays of scalars,
+    // and the stored value is parsed from JSON, so it carries no `toJSON`.
+    // Fall back to the same placeholder as a missing value if one ever does.
+    return JSON.stringify(value) ?? '—';
   }
   return String(value);
 }

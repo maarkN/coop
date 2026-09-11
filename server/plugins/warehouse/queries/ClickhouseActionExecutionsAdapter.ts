@@ -39,6 +39,12 @@ export class ClickhouseActionExecutionsAdapter implements IActionExecutionsAdapt
     private readonly tracer: SafeTracer,
   ) {}
 
+  /**
+   * Every action recorded against an item or its creator, newest first, with
+   * the policies, rules and moderator-supplied parameters each ran with.
+   * Background rule executions are excluded — they're machine bookkeeping
+   * rather than enforcement a reviewer needs to see.
+   */
   async getItemActionHistory(
     input: ItemActionHistoryInput,
   ): Promise<ReadonlyArray<ItemActionHistoryRecord>> {
