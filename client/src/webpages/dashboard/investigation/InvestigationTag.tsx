@@ -11,7 +11,7 @@ import CollapsibleText from '@/webpages/dashboard/mrt/manual_review_job/v2/compo
  * `CollapsibleText`, which does the precise grapheme check itself.
  */
 const INLINE_VALUE_MAX_CHARS = 120;
-const COLLAPSED_LINES = 3;
+const COLLAPSED_LINES = 2;
 
 type Props = {
   title: string;
