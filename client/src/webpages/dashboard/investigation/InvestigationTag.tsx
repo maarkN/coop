@@ -1,7 +1,81 @@
-export default function InvestigationTag({ title }: { title: string }) {
+import CollapsibleText from '@/webpages/dashboard/mrt/manual_review_job/v2/components/CollapsibleText';
+
+/**
+ * An action's parameter spec allows up to 50 parameters, 100 options on a
+ * MULTISELECT, and a STRING `maxLength` of 100,000 — so a large value is valid
+ * input, not a degenerate case. Values past this length get their own line and
+ * a line-clamp with a "Read more" toggle, keeping the table row bounded.
+ *
+ * Compared as UTF-16 length, which is always >= the grapheme count, so a value
+ * under the threshold is definitely short. Anything over is handed to
+ * `CollapsibleText`, which does the precise grapheme check itself.
+ */
+const INLINE_VALUE_MAX_CHARS = 120;
+const COLLAPSED_LINES = 3;
+
+type Props = {
+  title: string;
+  /**
+   * Runtime values the action ran with, keyed by parameter name. Omitted or
+   * empty renders the tag exactly as before, so callers that have no
+   * parameters are unaffected.
+   */
+  parameters?: Readonly<Record<string, unknown>>;
+};
+
+export default function InvestigationTag({ title, parameters }: Props) {
+  const entries = Object.entries(parameters ?? {});
+
   return (
     <div className="p-2 m-0.5 rounded-md border-solid border-gray-200 text-gray-500 bg-gray-50">
       {title}
+      {entries.length > 0 && (
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-xs">
+          {entries.map(([name, value]) => {
+            const formatted = formatParameterValue(value);
+            const label = <span className="font-medium">{name}</span>;
+
+            // `w-full` inside the wrapping flex container gives a long value
+            // its own line, so it can clamp without shoving the short entries
+            // that share the row out of alignment.
+            return formatted.length > INLINE_VALUE_MAX_CHARS ? (
+              <div key={name} className="w-full text-gray-400">
+                {label}
+                {': '}
+                <CollapsibleText
+                  text={formatted}
+                  maxLines={COLLAPSED_LINES}
+                  maxGraphemes={INLINE_VALUE_MAX_CHARS}
+                />
+              </div>
+            ) : (
+              <span key={name} className="text-gray-400">
+                {label}
+                {': '}
+                <span>{formatted}</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Parameter values are whatever the action's spec allows — string, number,
+ * boolean, or a multiselect's array. Objects shouldn't occur, but stringify
+ * rather than render `[object Object]` if one ever does.
+ */
+function formatParameterValue(value: unknown): string {
+  if (value == null) {
+    return '—';
+  }
+  if (Array.isArray(value)) {
+    return value.join(', ');
+  }
+  if (typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
 }

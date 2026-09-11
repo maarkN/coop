@@ -1150,6 +1150,7 @@ export class ItemInvestigationService {
           itemCreatorTypeId: record.userTypeId ?? undefined,
           policies: record.policies,
           ruleIds: record.ruleIds,
+          parameters: record.parameters,
           ts: record.occurredAt,
         };
       }),

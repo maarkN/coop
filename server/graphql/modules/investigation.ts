@@ -137,6 +137,12 @@ const typeDefs = /* GraphQL */ `
     jobId: ID
     policies: [String!]!
     ruleIds: [ID!]!
+    """
+    Moderator-supplied parameter values this action ran with, keyed by the
+    parameter's \`name\`. Empty when the action takes no parameters or the
+    execution predates parameter capture.
+    """
+    parameters: JSONObject!
     ts: DateTime!
   }
 `;
