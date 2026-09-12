@@ -189,7 +189,12 @@ export default function ItemActionHistory(props: {
         (action) => action.id === actionId,
       )?.parameters;
       if (declared == null) {
-        return {};
+        // The action is no longer in the org's list — deleted, most likely.
+        // Keep the stored values rather than hiding them: this is an audit
+        // view, and dropping them would recreate the very gap this feature
+        // closes. `formatParameterValue` renders non-scalars readably, so an
+        // unfiltered map degrades legibly instead of breaking.
+        return parameters;
       }
       const names = new Set(declared.map((parameter) => parameter.name));
       return Object.fromEntries(

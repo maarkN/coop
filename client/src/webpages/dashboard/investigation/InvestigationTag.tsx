@@ -66,20 +66,21 @@ export default function InvestigationTag({
 
 /**
  * Parameter values are whatever the action's spec allows — string, number,
- * boolean, or a multiselect's array. Objects shouldn't occur, but stringify
- * rather than render `[object Object]` if one ever does.
+ * boolean, or a multiselect's array. Nested objects shouldn't occur for a
+ * declared parameter, but they can reach this view when the action's metadata
+ * is unavailable and the stored map is shown unfiltered, so render them as
+ * JSON rather than `[object Object]`.
  */
 function formatParameterValue(value: unknown): string {
   if (value == null) {
     return '—';
   }
   if (Array.isArray(value)) {
-    return value.join(', ');
+    // Recursive so an array of objects reads as JSON rather than a row of
+    // `[object Object]`, which is what `join` alone produces.
+    return value.map(formatParameterValue).join(', ');
   }
   if (typeof value === 'object') {
-    // Shouldn't occur: validated parameters are scalars or arrays of scalars,
-    // and the stored value is parsed from JSON, so it carries no `toJSON`.
-    // Fall back to the same placeholder as a missing value if one ever does.
     return JSON.stringify(value) ?? '—';
   }
   return String(value);
