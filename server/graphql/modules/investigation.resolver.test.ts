@@ -10,6 +10,7 @@ import {
 import { instantiateOpaqueType } from '../../utils/typescript-types.js';
 import {
   resolveItemsWithId,
+  resolvers,
   type ItemsWithIdContext,
 } from './investigation.js';
 
@@ -245,6 +246,129 @@ describe('investigation resolvers', () => {
           service.synthesizeUserItemFromCreatorReferences,
         ).not.toHaveBeenCalled();
       });
+    });
+  });
+});
+
+describe('itemActionHistory parameter narrowing', () => {
+  const execution = {
+    actionId: 'action-ban',
+    itemId: 'user-1',
+    itemTypeId: 'user-type-1',
+    actorId: 'moderator-1',
+    jobId: 'job-1',
+    itemCreatorId: undefined,
+    itemCreatorTypeId: undefined,
+    policies: [],
+    ruleIds: [],
+    ts: new Date('2026-06-01T10:00:00.000Z'),
+  };
+
+  function makeHistoryContext(opts: {
+    parameters: Record<string, unknown>;
+    actions?: ReadonlyArray<Record<string, unknown>>;
+  }) {
+    const getActions = jest.fn(async () => opts.actions ?? []);
+    return {
+      getActions,
+      ctx: {
+        getUser: () => ({ orgId: 'org-1' }),
+        services: {
+          ItemInvestigationService: {
+            getItemActionHistory: jest.fn(async () => [
+              { ...execution, parameters: opts.parameters },
+            ]),
+          },
+          ModerationConfigService: { getActions },
+        },
+      },
+    };
+  }
+
+  const customAction = (
+    parameterNames: readonly string[],
+  ): Record<string, unknown> => ({
+    id: 'action-ban',
+    actionType: 'CUSTOM_ACTION',
+    customMrtApiParams: parameterNames.map((name) => ({
+      name,
+      displayName: name,
+      type: 'STRING',
+      required: false,
+    })),
+  });
+
+  async function run(ctx: unknown) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (resolvers.Query as any).itemActionHistory(
+      {},
+      { itemIdentifier: { id: 'user-1', typeId: 'user-type-1' } },
+      ctx,
+    );
+  }
+
+  it('drops values the action does not declare', async () => {
+    const { ctx } = makeHistoryContext({
+      parameters: {
+        num_days: 30,
+        reportHistory: [{ reason: 'spam', reporter: 'u1' }],
+        bogus_field: 'leak',
+      },
+      actions: [customAction(['num_days'])],
+    });
+
+    const [row] = await run(ctx);
+
+    expect(row.parameters).toEqual({ num_days: 30 });
+  });
+
+  it('keeps a declared `reason` parameter', async () => {
+    // The DEFAULT manual-review path overwrites `reason` with the decision
+    // reason at write time, so the stored value may not be what the moderator
+    // typed — but a declared parameter must still be shown rather than
+    // filtered out as if it were callback metadata.
+    const { ctx } = makeHistoryContext({
+      parameters: { reason: 'Repeated scam posts', reportHistory: [] },
+      actions: [customAction(['reason'])],
+    });
+
+    const [row] = await run(ctx);
+
+    expect(row.parameters).toEqual({ reason: 'Repeated scam posts' });
+  });
+
+  it('passes stored values through when the action is unknown', async () => {
+    const stored = { num_days: 30, reportHistory: [{ reason: 'spam' }] };
+    const { ctx } = makeHistoryContext({ parameters: stored, actions: [] });
+
+    const [row] = await run(ctx);
+
+    expect(row.parameters).toEqual(stored);
+  });
+
+  it('declares nothing for a non-custom action', async () => {
+    const { ctx } = makeHistoryContext({
+      parameters: { reason: 'set by the callback' },
+      actions: [{ id: 'action-ban', actionType: 'ENQUEUE_TO_MRT' }],
+    });
+
+    const [row] = await run(ctx);
+
+    expect(row.parameters).toEqual({});
+  });
+
+  it('looks up each distinct action once', async () => {
+    const { ctx, getActions } = makeHistoryContext({
+      parameters: {},
+      actions: [customAction([])],
+    });
+
+    await run(ctx);
+
+    expect(getActions).toHaveBeenCalledTimes(1);
+    expect(getActions).toHaveBeenCalledWith({
+      orgId: 'org-1',
+      ids: ['action-ban'],
     });
   });
 });
