@@ -54,9 +54,6 @@ gql`
         ... on ActionBase {
           id
           name
-          parameters {
-            name
-          }
         }
       }
       policies {
@@ -173,37 +170,6 @@ export default function ItemActionHistory(props: {
     [data?.myOrg],
   );
 
-  /**
-   * Keep only the values the action actually declares as parameters.
-   *
-   * `ACTION_EXECUTIONS.parameters` is not guaranteed to hold declared
-   * parameters alone: for a DEFAULT manual review job the decision path merges
-   * callback-only fields (`reportHistory`, `reason`) into the payload before it
-   * is logged — see the block in `iocContainer` flagged there as temporary.
-   * Rendering the raw map would surface that webhook plumbing as though a
-   * moderator had supplied it.
-   */
-  const getDeclaredParameters = useCallback(
-    (actionId: string, parameters: Readonly<Record<string, unknown>>) => {
-      const declared = data?.myOrg?.actions.find(
-        (action) => action.id === actionId,
-      )?.parameters;
-      if (declared == null) {
-        // The action is no longer in the org's list — deleted, most likely.
-        // Keep the stored values rather than hiding them: this is an audit
-        // view, and dropping them would recreate the very gap this feature
-        // closes. `formatParameterValue` renders non-scalars readably, so an
-        // unfiltered map degrades legibly instead of breaking.
-        return parameters;
-      }
-      const names = new Set(declared.map((parameter) => parameter.name));
-      return Object.fromEntries(
-        Object.entries(parameters).filter(([name]) => names.has(name)),
-      );
-    },
-    [data?.myOrg],
-  );
-
   const getPolicyName = useCallback(
     (policyId: string) =>
       data?.myOrg?.policies.find((policy) => policy.id === policyId)?.name ??
@@ -273,10 +239,9 @@ export default function ItemActionHistory(props: {
       actions: [
         {
           name: getActionName(decisionData.actionId),
-          parameters: getDeclaredParameters(
-            decisionData.actionId,
-            decisionData.parameters,
-          ),
+          // Already narrowed to the action's declared parameters by the
+          // `itemActionHistory` resolver.
+          parameters: decisionData.parameters,
         },
       ],
     }));
@@ -318,14 +283,7 @@ export default function ItemActionHistory(props: {
         actions: [{ name: 'Ignore', parameters: {} }],
       })),
     ];
-  }, [
-    data,
-    recentIgnores,
-    getPolicyName,
-    getReviewerName,
-    getActionName,
-    getDeclaredParameters,
-  ]);
+  }, [data, recentIgnores, getPolicyName, getReviewerName, getActionName]);
 
   const tableData = useMemo(() => {
     if (!dataValues) {

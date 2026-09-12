@@ -8314,37 +8314,21 @@ export type GQLItemActionHistoryQuery = {
           readonly __typename: 'CustomAction';
           readonly id: string;
           readonly name: string;
-          readonly parameters: ReadonlyArray<{
-            readonly __typename: 'ActionParameter';
-            readonly name: string;
-          }>;
         }
       | {
           readonly __typename: 'EnqueueAuthorToMrtAction';
           readonly id: string;
           readonly name: string;
-          readonly parameters: ReadonlyArray<{
-            readonly __typename: 'ActionParameter';
-            readonly name: string;
-          }>;
         }
       | {
           readonly __typename: 'EnqueueToMrtAction';
           readonly id: string;
           readonly name: string;
-          readonly parameters: ReadonlyArray<{
-            readonly __typename: 'ActionParameter';
-            readonly name: string;
-          }>;
         }
       | {
           readonly __typename: 'EnqueueToNcmecAction';
           readonly id: string;
           readonly name: string;
-          readonly parameters: ReadonlyArray<{
-            readonly __typename: 'ActionParameter';
-            readonly name: string;
-          }>;
         }
     >;
     readonly policies: ReadonlyArray<{
@@ -32262,9 +32246,6 @@ export const GQLItemActionHistoryDocument = gql`
         ... on ActionBase {
           id
           name
-          parameters {
-            name
-          }
         }
       }
       policies {
