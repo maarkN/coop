@@ -265,9 +265,13 @@ describe('itemActionHistory parameter narrowing', () => {
   };
 
   function makeHistoryContext(opts: {
-    parameters: Record<string, unknown>;
+    /** Shorthand for a single execution row. */
+    parameters?: Record<string, unknown>;
+    /** Explicit rows, for cases that need more than one. */
+    rows?: ReadonlyArray<Record<string, unknown>>;
     actions?: ReadonlyArray<Record<string, unknown>>;
   }) {
+    const rows = opts.rows ?? [{ ...execution, parameters: opts.parameters }];
     const getActions = jest.fn(async () => opts.actions ?? []);
     return {
       getActions,
@@ -275,9 +279,7 @@ describe('itemActionHistory parameter narrowing', () => {
         getUser: () => ({ orgId: 'org-1' }),
         services: {
           ItemInvestigationService: {
-            getItemActionHistory: jest.fn(async () => [
-              { ...execution, parameters: opts.parameters },
-            ]),
+            getItemActionHistory: jest.fn(async () => rows),
           },
           ModerationConfigService: { getActions },
         },
@@ -357,18 +359,31 @@ describe('itemActionHistory parameter narrowing', () => {
     expect(row.parameters).toEqual({});
   });
 
-  it('looks up each distinct action once', async () => {
+  it('batches the lookup, one entry per distinct action', async () => {
+    // Three rows across two actions: a per-row lookup would call twice with
+    // duplicated ids, so this fails if the batching regresses.
     const { ctx, getActions } = makeHistoryContext({
-      parameters: {},
-      actions: [customAction([])],
+      rows: [
+        { ...execution, actionId: 'action-ban', parameters: { num_days: 30 } },
+        { ...execution, actionId: 'action-warn', parameters: { note: 'x' } },
+        { ...execution, actionId: 'action-ban', parameters: { num_days: 7 } },
+      ],
+      actions: [customAction(['num_days'])],
     });
 
-    await run(ctx);
+    const rows = await run(ctx);
 
     expect(getActions).toHaveBeenCalledTimes(1);
     expect(getActions).toHaveBeenCalledWith({
       orgId: 'org-1',
-      ids: ['action-ban'],
+      ids: ['action-ban', 'action-warn'],
     });
+    // Narrowing still applied per row: `action-warn` has no spec, so its
+    // stored values pass through; `action-ban` keeps only `num_days`.
+    expect(rows.map((it: { parameters: unknown }) => it.parameters)).toEqual([
+      { num_days: 30 },
+      { note: 'x' },
+      { num_days: 7 },
+    ]);
   });
 });
