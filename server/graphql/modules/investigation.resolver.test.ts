@@ -250,6 +250,11 @@ describe('investigation resolvers', () => {
   });
 });
 
+type ItemActionRow = {
+  actionId: string;
+  parameters: Record<string, unknown>;
+};
+
 describe('itemActionHistory parameter narrowing', () => {
   const execution = {
     actionId: 'action-ban',
@@ -300,13 +305,27 @@ describe('itemActionHistory parameter narrowing', () => {
     })),
   });
 
-  async function run(ctx: unknown) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (resolvers.Query as any).itemActionHistory(
+  /**
+   * Narrow `resolvers.Query` to just the resolver under test, following the
+   * pattern in `integration.resolver.test.ts`. Declaring the signature keeps
+   * the argument and return shapes checked without standing up a full
+   * `Context`, which these tests never exercise beyond the two services mocked
+   * above.
+   */
+  async function run(ctx: unknown): Promise<ItemActionRow[]> {
+    const Query = resolvers.Query as {
+      itemActionHistory: (
+        parent: unknown,
+        args: { itemIdentifier: { id: string; typeId: string } },
+        ctx: unknown,
+      ) => Promise<unknown>;
+    };
+
+    return (await Query.itemActionHistory(
       {},
       { itemIdentifier: { id: 'user-1', typeId: 'user-type-1' } },
       ctx,
-    );
+    )) as ItemActionRow[];
   }
 
   it('drops values the action does not declare', async () => {
@@ -380,7 +399,7 @@ describe('itemActionHistory parameter narrowing', () => {
     });
     // Narrowing still applied per row: `action-warn` has no spec, so its
     // stored values pass through; `action-ban` keeps only `num_days`.
-    expect(rows.map((it: { parameters: unknown }) => it.parameters)).toEqual([
+    expect(rows.map((it) => it.parameters)).toEqual([
       { num_days: 30 },
       { note: 'x' },
       { num_days: 7 },
