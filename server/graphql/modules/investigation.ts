@@ -699,7 +699,9 @@ const Query: GQLQueryResolvers = {
     );
   },
 
-  async itemActionHistory(_, { itemIdentifier, submissionTime }, context) {
+  // Parent arg is `__` so it doesn't shadow the lodash import, matching
+  // `latestItemsCreatedByWithThread` above.
+  async itemActionHistory(__, { itemIdentifier, submissionTime }, context) {
     const user = context.getUser();
     if (user == null) {
       throw unauthenticatedError('Unauthenticated User');
@@ -714,10 +716,15 @@ const Query: GQLQueryResolvers = {
           : undefined,
       });
 
+    // Skip the Postgres round trip for an item with no action history, as
+    // `ActionAPI.getGraphQLActionsFromIds` does for empty ids.
+    if (history.length === 0) {
+      return [];
+    }
+
     const actions = await context.services.ModerationConfigService.getActions({
       orgId: user.orgId,
-      // Not `_.uniq`: the resolver's parent arg shadows the lodash import.
-      ids: [...new Set(history.map((it) => it.actionId))],
+      ids: _.uniq(history.map((it) => it.actionId)),
     });
     const declaredNamesByAction = new Map(
       actions.map((action) => [

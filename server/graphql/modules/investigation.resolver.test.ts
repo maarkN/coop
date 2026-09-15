@@ -367,6 +367,18 @@ describe('itemActionHistory parameter narrowing', () => {
     expect(row.parameters).toEqual(stored);
   });
 
+  it('skips the action lookup when there is no history', async () => {
+    const { ctx, getActions } = makeHistoryContext({
+      rows: [],
+      actions: [customAction(['num_days'])],
+    });
+
+    const rows = await run(ctx);
+
+    expect(rows).toEqual([]);
+    expect(getActions).not.toHaveBeenCalled();
+  });
+
   it('declares nothing for a non-custom action', async () => {
     const { ctx } = makeHistoryContext({
       parameters: { reason: 'set by the callback' },
