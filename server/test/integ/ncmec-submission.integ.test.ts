@@ -48,6 +48,7 @@ describe('NCMEC submitReport (integration)', () => {
       contactPersonPhone: null,
       mediaReviewRequirement: 'ALL',
       minMediaToReview: null,
+      reportedMediaHashBankId: null,
     });
 
     const stub = makeStubFetchHTTP(reportId, fileId, {
