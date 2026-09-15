@@ -358,13 +358,25 @@ describe('itemActionHistory parameter narrowing', () => {
     expect(row.parameters).toEqual({ reason: 'Repeated scam posts' });
   });
 
-  it('passes stored values through when the action is unknown', async () => {
-    const stored = { num_days: 30, reportHistory: [{ reason: 'spam' }] };
-    const { ctx } = makeHistoryContext({ parameters: stored, actions: [] });
+  it('keeps stored values when the action is unknown, minus reportHistory', async () => {
+    // No spec to allowlist against, so values survive — except the key the
+    // DEFAULT decision path injects, which carries reporter ids. `reason` is
+    // kept because it is also a common declared parameter name.
+    const { ctx } = makeHistoryContext({
+      parameters: {
+        num_days: 30,
+        reason: 'Repeated scam posts',
+        reportHistory: [{ reason: 'spam', reporter: 'user-9' }],
+      },
+      actions: [],
+    });
 
     const [row] = await run(ctx);
 
-    expect(row.parameters).toEqual(stored);
+    expect(row.parameters).toEqual({
+      num_days: 30,
+      reason: 'Repeated scam posts',
+    });
   });
 
   it('skips the action lookup when there is no history', async () => {

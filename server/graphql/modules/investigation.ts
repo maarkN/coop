@@ -749,6 +749,13 @@ const Query: GQLQueryResolvers = {
 };
 
 /**
+ * Keys the DEFAULT manual-review decision path merges into the action payload
+ * for the webhook's benefit (`iocContainer`, flagged there as temporary). They
+ * are never moderator-supplied parameters.
+ */
+const CALLBACK_ONLY_PARAMETER_KEYS = ['reportHistory'] as const;
+
+/**
  * Keep only the values the action declares as parameters.
  *
  * `ACTION_EXECUTIONS.parameters` is not limited to declared parameters: the
@@ -762,16 +769,21 @@ const Query: GQLQueryResolvers = {
  * was recorded, so a since-renamed parameter drops out. That is preferable to
  * showing it under a name that no longer means the same thing.
  *
- * When the action is unknown — deleted, most likely — the stored values pass
- * through untouched. This is an audit surface, and hiding them would recreate
- * the very gap this field exists to close.
+ * When the action is unknown — deleted, most likely — there is no spec to
+ * allowlist against, so the stored values are kept (this is an audit surface,
+ * and hiding them would recreate the gap this field exists to close) minus the
+ * known callback-only keys.
  */
 function narrowToDeclaredParameters(
   declaredNames: ReadonlySet<string> | undefined,
   parameters: JsonObject,
 ): JsonObject {
   if (declaredNames === undefined) {
-    return parameters;
+    // Without a spec there is no allowlist, but `reportHistory` is never a
+    // moderator parameter: it is injected by the DEFAULT decision path and
+    // carries reporter ids. `reason` stays, since it is also a common declared
+    // parameter name and there is no spec here to tell the two apart.
+    return _.omit(parameters, CALLBACK_ONLY_PARAMETER_KEYS);
   }
   return Object.fromEntries(
     Object.entries(parameters).filter(([name]) => declaredNames.has(name)),
