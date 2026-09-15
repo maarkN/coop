@@ -38,6 +38,7 @@ export class NcmecService {
     readonly tracer: Dependencies['Tracer'],
     readonly itemInvestigationService: Dependencies['ItemInvestigationService'],
     readonly getItemTypeEventuallyConsistent: Dependencies['getItemTypeEventuallyConsistent'],
+    readonly hmaService: Dependencies['HMAHashBankService'],
   ) {
     this.ncmecReporting = new NcmecReporting(
       pgQuery,
@@ -47,6 +48,7 @@ export class NcmecService {
       moderationConfigService,
       getItemTypeEventuallyConsistent,
       tracer,
+      hmaService,
     );
     this.ncmecEnqueueToMrt = new NcmecEnqueueToMrt(
       partialItemsService,
@@ -335,6 +337,7 @@ export default inject(
     'Tracer',
     'ItemInvestigationService',
     'getItemTypeEventuallyConsistent',
+    'HMAHashBankService',
   ],
   NcmecService,
 );
