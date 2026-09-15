@@ -1,3 +1,6 @@
+import capitalize from 'lodash/capitalize';
+import lowerCase from 'lodash/lowerCase';
+
 import CollapsibleText from '@/webpages/dashboard/mrt/manual_review_job/v2/components/CollapsibleText';
 
 /**
@@ -35,7 +38,9 @@ export default function InvestigationTag({
         <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-xs">
           {entries.map(([name, value]) => {
             const formatted = formatParameterValue(value);
-            const label = <span className="font-medium">{name}</span>;
+            const label = (
+              <span className="font-medium">{humanizeParameterName(name)}</span>
+            );
 
             // `w-full` inside the wrapping flex container gives a long value
             // its own line, so it can clamp without shoving the short entries
@@ -83,5 +88,20 @@ function formatParameterValue(value: unknown): string {
   if (typeof value === 'object') {
     return JSON.stringify(value) ?? '—';
   }
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No';
+  }
   return String(value);
+}
+
+/**
+ * `num_days` -> `Num days`, `notifyUser` -> `Notify user`. `lowerCase` splits on
+ * underscores, hyphens and camel humps alike, so both naming styles an action
+ * spec might use come out the same.
+ *
+ * Deliberately sentence case rather than `titleCaseEnumString`'s Title Case: a
+ * parameter name reads as a label, not an enum value.
+ */
+function humanizeParameterName(name: string): string {
+  return capitalize(lowerCase(name));
 }
