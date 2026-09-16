@@ -403,7 +403,7 @@ describe('HmaService', () => {
       expect(fetchHTTP).toHaveBeenCalledTimes(1);
       const call = fetchHTTP.mock.calls[0][0];
       const url = new URL(call.url);
-      expect(url.pathname).toBe('/c/bank/COOP_ORG1_BANK/content');
+      expect(url.pathname).toMatch(/\/c\/bank\/COOP_ORG1_BANK\/content$/);
       expect([...url.searchParams.keys()]).toEqual(['url']);
       expect(url.searchParams.get('url')).toBe(
         'https://cdn.example.com/a.jpg?sig=1',

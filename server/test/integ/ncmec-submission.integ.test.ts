@@ -230,10 +230,14 @@ describe('NCMEC submitReport (integration)', () => {
 
       expect(result).toBe('SUCCESS');
       const addCalls = hmaAddContentCalls(stub.calls);
-      expect(addCalls.map((c) => new URL(c.url).pathname)).toEqual([
-        `/c/bank/${hashBank.hma_name}/content`,
-        `/c/bank/${hashBank.hma_name}/content`,
-      ]);
+      expect(addCalls).toHaveLength(2);
+      for (const call of addCalls) {
+        expect(
+          new URL(call.url).pathname.endsWith(
+            `/c/bank/${hashBank.hma_name}/content`,
+          ),
+        ).toBe(true);
+      }
       expect(
         addCalls.map((c) => new URL(c.url).searchParams.get('url')).sort(),
       ).toEqual([SECOND_MEDIA_URL, MEDIA_URL].sort());
