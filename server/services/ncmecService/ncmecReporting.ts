@@ -2060,12 +2060,14 @@ export default class NcmecReporting {
             })
             .execute();
 
-          if (isTest === false) {
+          const reportedMediaHashBankId =
+            ncmecConfig?.reported_media_hash_bank_id;
+          if (isTest === false && reportedMediaHashBankId != null) {
             await addReportedMediaToHashBank(
               { hmaService: this.hmaService, logError: logErrorJson },
               {
                 orgId: reportParams.orgId,
-                bankId: ncmecConfig?.reported_media_hash_bank_id,
+                bankId: reportedMediaHashBankId,
                 ncmecReportId: reportId,
                 media: reportParams.media,
               },

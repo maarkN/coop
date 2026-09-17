@@ -259,6 +259,25 @@ describe('NCMEC submitReport (integration)', () => {
   );
 
   testWithFixture(
+    'does not add anything to a hash bank when the org has no bank selected',
+    async ({ deps, ncmecReporting, orgId, stub, userItemTypeId }) => {
+      await deps.KyselyPg.updateTable('ncmec_reporting.ncmec_org_settings')
+        .set({ reported_media_hash_bank_id: null })
+        .where('org_id', '=', orgId)
+        .execute();
+
+      const result = await ncmecReporting.submitReport(
+        reportWithTwoMedia(orgId, userItemTypeId),
+        false,
+      );
+
+      expect(result).toBe('SUCCESS');
+      expect(stub.calls.some((c) => c.url.includes('/c/bank/'))).toBe(false);
+    },
+    60_000,
+  );
+
+  testWithFixture(
     'does not add anything to the hash bank for a test submission',
     async ({ ncmecReporting, orgId, stub, userItemTypeId }) => {
       const result = await ncmecReporting.submitReport(

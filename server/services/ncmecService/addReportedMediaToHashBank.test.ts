@@ -39,20 +39,6 @@ function makeDeps(
 }
 
 describe('addReportedMediaToHashBank', () => {
-  it('does nothing when the org has no bank selected', async () => {
-    const deps = makeDeps();
-
-    await addReportedMediaToHashBank(deps, {
-      orgId: 'org1',
-      bankId: null,
-      ncmecReportId: '123',
-      media: MEDIA,
-    });
-
-    expect(deps.hmaService.getBankById).not.toHaveBeenCalled();
-    expect(deps.hmaService.addContentToBank).not.toHaveBeenCalled();
-  });
-
   it('does nothing when the report has no media', async () => {
     const deps = makeDeps();
 

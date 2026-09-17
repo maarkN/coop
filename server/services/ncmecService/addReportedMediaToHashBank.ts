@@ -16,13 +16,13 @@ export async function addReportedMediaToHashBank(
   deps: AddReportedMediaToHashBankDeps,
   opts: {
     orgId: string;
-    bankId: number | null | undefined;
+    bankId: number;
     ncmecReportId: string;
     media: readonly ReportedMedia[];
   },
 ): Promise<void> {
   const { orgId, bankId, ncmecReportId, media } = opts;
-  if (bankId == null || media.length === 0) {
+  if (media.length === 0) {
     return;
   }
 
