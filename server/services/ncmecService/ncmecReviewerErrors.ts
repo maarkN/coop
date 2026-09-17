@@ -55,10 +55,6 @@ const REVIEWER_PREFIX_RULES: readonly {
     category: 'HASH_BANK',
   },
   { prefix: 'Reported media hash bank was not found', category: 'HASH_BANK' },
-  {
-    prefix: 'Organization does not have a reported media hash bank',
-    category: 'HASH_BANK',
-  },
 ];
 
 function classifyByHttpStatus(status: number | undefined): string {

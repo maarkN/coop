@@ -1727,13 +1727,9 @@ export default class NcmecReporting {
     orgId: string;
     reportedMedia: ReadonlyArray<Pick<Media, 'id' | 'typeId' | 'url'>>;
     reportId: string;
+    reportedMediaHashBankId: number;
   }) {
-    const { orgId, reportedMedia, reportId } = input;
-    const reportedMediaHashBankId = await this.reportedMediaHashBankId(orgId);
-
-    if (reportedMediaHashBankId == null) {
-      throw new Error('Organization does not have a reported media hash bank');
-    }
+    const { orgId, reportedMedia, reportId, reportedMediaHashBankId } = input;
 
     const bank = await this.hmaService.getBankById(
       orgId,
@@ -1804,15 +1800,6 @@ export default class NcmecReporting {
       .where('org_id', '=', orgId)
       .executeTakeFirst();
     return rows?.ncmec_additional_info_endpoint;
-  }
-
-  async reportedMediaHashBankId(orgId: string): Promise<number | undefined> {
-    const rows = await this.pgQuery
-      .selectFrom('ncmec_reporting.ncmec_org_settings')
-      .select(['reported_media_hash_bank_id'])
-      .where('org_id', '=', orgId)
-      .executeTakeFirst();
-    return rows?.reported_media_hash_bank_id ?? undefined;
   }
 
   async getUserHasExistingNcmeReport(params: {
@@ -2147,8 +2134,11 @@ export default class NcmecReporting {
             });
           }
 
+          const reportedMediaHashBankId =
+            ncmecConfig?.reported_media_hash_bank_id;
+
           if (
-            ncmecConfig?.reported_media_hash_bank_id != null &&
+            reportedMediaHashBankId != null &&
             reportParams.media.length > 0 &&
             isTest === false
           ) {
@@ -2156,6 +2146,7 @@ export default class NcmecReporting {
               orgId: reportParams.orgId,
               reportedMedia: reportParams.media,
               reportId,
+              reportedMediaHashBankId,
             });
           }
           return 'SUCCESS';

@@ -53,7 +53,6 @@ describe('summarizeNcmecErrorForReviewer', () => {
     for (const message of [
       'Failed to add reported media to hash bank: Failed to add content to bank: 500',
       'Reported media hash bank was not found',
-      'Organization does not have a reported media hash bank',
     ]) {
       expect(summarizeNcmecErrorForReviewer(new Error(message))).toBe(
         'NCMEC accepted the report, but adding its media to the hash bank failed. Check the bank in Settings → NCMEC.',

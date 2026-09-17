@@ -11,6 +11,11 @@ import {
   NcmecReporting,
   type NCMECReportParams,
 } from '../../services/ncmecService/index.js';
+import {
+  type CoopRequestQuery,
+  type FetchHTTP,
+  type HandleResponseBody,
+} from '../../services/networkingService/index.js';
 import { jsonParse, type JsonOf } from '../../utils/encoding.js';
 import createOrg from '../fixtureHelpers/createOrg.js';
 import {
@@ -30,20 +35,27 @@ function makeReporting(
   deps: Deps,
   reportId: string,
   stubOpts: { hmaAddContentStatus?: number } = {},
+  onRequest?: (url: string) => Promise<void>,
 ) {
   const stub = makeStubFetchHTTP(reportId, 'f1', {
     preservationUrl: PRESERVATION_URL,
     ...stubOpts,
   });
+  const fetchHTTP: FetchHTTP = async <T extends HandleResponseBody>(
+    query: CoopRequestQuery<T>,
+  ) => {
+    await onRequest?.(query.url);
+    return stub.fetchHTTP(query);
+  };
   const ncmecReporting = new NcmecReporting(
     deps.KyselyPg,
     deps.KyselyPgReadReplica,
-    stub.fetchHTTP,
+    fetchHTTP,
     deps.SigningKeyPairService,
     deps.ModerationConfigService,
     deps.getItemTypeEventuallyConsistent,
     deps.Tracer,
-    new HmaService(stub.fetchHTTP, deps.KyselyPg),
+    new HmaService(fetchHTTP, deps.KyselyPg),
   );
   return { stub, ncmecReporting };
 }
@@ -260,6 +272,44 @@ describe('NCMEC submitReport (integration)', () => {
         [MEDIA_URL]: expectedBody('media-1'),
         [SECOND_MEDIA_URL]: expectedBody('media-2'),
       });
+    },
+    60_000,
+  );
+
+  testWithFixture(
+    'uses the bank read before submitting, even if the setting is cleared during submission',
+    async ({ deps, orgId, reportId, hashBank, userItemTypeId }) => {
+      const { stub, ncmecReporting } = makeReporting(
+        deps,
+        reportId,
+        {},
+        async (url) => {
+          if (url.endsWith('/ispws/submit')) {
+            await deps.KyselyPg.updateTable(
+              'ncmec_reporting.ncmec_org_settings',
+            )
+              .set({ reported_media_hash_bank_id: null })
+              .where('org_id', '=', orgId)
+              .execute();
+          }
+        },
+      );
+
+      const result = await ncmecReporting.submitReport(
+        reportWithTwoMedia(orgId, userItemTypeId),
+        false,
+      );
+
+      expect(result).toBe('SUCCESS');
+      const addCalls = hmaAddContentCalls(stub.calls);
+      expect(addCalls).toHaveLength(2);
+      for (const call of addCalls) {
+        expect(
+          new URL(call.url).pathname.endsWith(
+            `/c/bank/${hashBank.hma_name}/content`,
+          ),
+        ).toBe(true);
+      }
     },
     60_000,
   );
