@@ -802,9 +802,10 @@ export class HmaService {
         content_uri?: string;
         json?: Record<string, unknown>;
       };
+      note?: string;
     },
   ): Promise<BankContentResponse> {
-    const { file, contentType, url, metadata } = options;
+    const { file, contentType, url, metadata, note } = options;
 
     if (!url && (!file || !contentType)) {
       throw new Error(
@@ -812,18 +813,28 @@ export class HmaService {
       );
     }
 
+    // HMA counts code points (Python len), not UTF-16 units.
+    if (note && [...note].length > 255) {
+      throw new Error('note must be 255 characters or less');
+    }
+
     let response;
     if (url) {
       // HMA reads `metadata` from the JSON body only; query-param metadata is dropped.
       const params = new URLSearchParams({ url });
+      let body: string | undefined;
+      if (metadata || note) {
+        body = jsonStringify({
+          ...(metadata ? { metadata } : {}),
+          ...(note ? { note } : {}),
+        });
+      }
+
       response = await this.fetchHTTP({
         url: `${this.hmaServiceUrl}/c/bank/${bankName}/content?${params.toString()}`,
         method: 'post',
-        ...(metadata
-          ? {
-              body: jsonStringify({ metadata }),
-              headers: { 'Content-Type': 'application/json' },
-            }
+        ...(body !== undefined
+          ? { body, headers: { 'Content-Type': 'application/json' } }
           : {}),
         handleResponseBody: 'as-json',
       });
@@ -844,6 +855,8 @@ export class HmaService {
         if (metadata.json)
           formData.append('metadata', jsonStringify(metadata.json));
       }
+
+      if (note) formData.append('note', note);
 
       response = await this.fetchHTTP({
         url: `${this.hmaServiceUrl}/c/bank/${bankName}/content`,

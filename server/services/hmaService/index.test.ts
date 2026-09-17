@@ -428,5 +428,133 @@ describe('HmaService', () => {
         }),
       ).rejects.toThrow('Failed to add content to bank: 400');
     });
+
+    describe('note', () => {
+      const URL_OPTIONS = { url: 'https://cdn.example.com/a.jpg' };
+
+      function makeOkService() {
+        const fetchHTTP = jest
+          .fn()
+          .mockResolvedValue(ok({ id: 7, signals: { pdq: 'abc' } }));
+        return { fetchHTTP, svc: makeService(fetchHTTP) };
+      }
+
+      it('sends the note next to the metadata in the JSON body', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+
+        await svc.addContentToBank('COOP_ORG1_BANK', {
+          ...URL_OPTIONS,
+          metadata: { content_id: 'type1:item1' },
+          note: 'Reported to NCMEC',
+        });
+
+        expect(jsonParse(fetchHTTP.mock.calls[0][0].body)).toEqual({
+          metadata: { content_id: 'type1:item1' },
+          note: 'Reported to NCMEC',
+        });
+      });
+
+      it('sends a JSON body with only the note when there is no metadata', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+
+        await svc.addContentToBank('COOP_ORG1_BANK', {
+          ...URL_OPTIONS,
+          note: 'Reported to NCMEC',
+        });
+
+        const call = fetchHTTP.mock.calls[0][0];
+        expect(call.headers).toEqual({ 'Content-Type': 'application/json' });
+        expect(jsonParse(call.body)).toEqual({ note: 'Reported to NCMEC' });
+      });
+
+      it('sends no body and no JSON content type without metadata or note', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+
+        await svc.addContentToBank('COOP_ORG1_BANK', URL_OPTIONS);
+
+        const call = fetchHTTP.mock.calls[0][0];
+        expect(call.body).toBeUndefined();
+        expect(call.headers).toBeUndefined();
+      });
+
+      it('does not send an empty note, since HMA treats it as no note', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+
+        await svc.addContentToBank('COOP_ORG1_BANK', {
+          ...URL_OPTIONS,
+          metadata: { content_id: 'type1:item1' },
+          note: '',
+        });
+
+        expect(jsonParse(fetchHTTP.mock.calls[0][0].body)).toEqual({
+          metadata: { content_id: 'type1:item1' },
+        });
+      });
+
+      it('accepts a note with exactly 255 characters', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+        const note = 'a'.repeat(255);
+
+        await svc.addContentToBank('COOP_ORG1_BANK', { ...URL_OPTIONS, note });
+
+        expect(jsonParse(fetchHTTP.mock.calls[0][0].body)).toEqual({ note });
+      });
+
+      it('rejects a note longer than 255 characters before calling HMA', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+
+        await expect(
+          svc.addContentToBank('COOP_ORG1_BANK', {
+            ...URL_OPTIONS,
+            note: 'a'.repeat(256),
+          }),
+        ).rejects.toThrow('note must be 255 characters or less');
+        expect(fetchHTTP).not.toHaveBeenCalled();
+      });
+
+      it('counts characters like HMA does, so 255 emoji are accepted and 256 are not', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+
+        await svc.addContentToBank('COOP_ORG1_BANK', {
+          ...URL_OPTIONS,
+          note: '🚩'.repeat(255),
+        });
+        expect(fetchHTTP).toHaveBeenCalledTimes(1);
+
+        await expect(
+          svc.addContentToBank('COOP_ORG1_BANK', {
+            ...URL_OPTIONS,
+            note: '🚩'.repeat(256),
+          }),
+        ).rejects.toThrow('note must be 255 characters or less');
+        expect(fetchHTTP).toHaveBeenCalledTimes(1);
+      });
+
+      it('appends the note to the form data on file uploads', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+
+        await svc.addContentToBank('COOP_ORG1_BANK', {
+          file: new Blob(['bytes'], { type: 'image/png' }),
+          contentType: 'photo',
+          note: 'Reported to NCMEC',
+        });
+
+        const form = fetchHTTP.mock.calls[0][0].body as FormData;
+        expect(form.get('note')).toBe('Reported to NCMEC');
+      });
+
+      it('does not append an empty note on file uploads', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+
+        await svc.addContentToBank('COOP_ORG1_BANK', {
+          file: new Blob(['bytes'], { type: 'image/png' }),
+          contentType: 'photo',
+          note: '',
+        });
+
+        const form = fetchHTTP.mock.calls[0][0].body as FormData;
+        expect(form.has('note')).toBe(false);
+      });
+    });
   });
 });
