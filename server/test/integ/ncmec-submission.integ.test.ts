@@ -292,7 +292,7 @@ describe('NCMEC submitReport (integration)', () => {
   );
 
   testWithFixture(
-    'keeps the report successful and records no NCMEC error when HMA rejects the content',
+    'fails the report after retrying when HMA keeps rejecting the content',
     async ({ deps, orgId, reportId, userItemTypeId }) => {
       const { stub, ncmecReporting } = makeReporting(deps, reportId, {
         hmaAddContentStatus: 500,
@@ -301,8 +301,9 @@ describe('NCMEC submitReport (integration)', () => {
 
       const result = await ncmecReporting.submitReport(params, false);
 
-      expect(result).toBe('SUCCESS');
-      expect(hmaAddContentCalls(stub.calls)).toHaveLength(2);
+      expect(result).toBe('FAILURE');
+      // 2 media x (1 attempt + 5 retries)
+      expect(hmaAddContentCalls(stub.calls)).toHaveLength(12);
       expect(stub.calls.some((c) => c.url === PRESERVATION_URL)).toBe(true);
       const errorRow = await deps.KyselyPg.selectFrom(
         'ncmec_reporting.ncmec_reports_errors',
@@ -310,7 +311,8 @@ describe('NCMEC submitReport (integration)', () => {
         .selectAll()
         .where('job_id', '=', params.jobId!)
         .executeTakeFirst();
-      expect(errorRow).toBeUndefined();
+      expect(errorRow?.status).toBe('RETRYABLE_ERROR');
+      expect(errorRow?.last_error).not.toContain('cdn.example');
     },
     60_000,
   );

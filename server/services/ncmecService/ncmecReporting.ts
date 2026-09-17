@@ -28,7 +28,6 @@ import {
   makeFormDataLikeWithStreams,
   type FormDataLikeWithStreams,
 } from '../networkingService/index.js';
-import { addReportedMediaToHashBank } from './addReportedMediaToHashBank.js';
 import { type NcmecReportingServicePg } from './dbTypes.js';
 import {
   ncmecDebugDump,
@@ -1724,6 +1723,65 @@ export default class NcmecReporting {
     await fetchWithRetries();
   }
 
+  async #addReportedMediaToHashBank(input: {
+    orgId: string;
+    reportedMedia: ReadonlyArray<Pick<Media, 'id' | 'typeId' | 'url'>>;
+    reportId: string;
+  }) {
+    const { orgId, reportedMedia, reportId } = input;
+    const reportedMediaHashBankId = await this.reportedMediaHashBankId(orgId);
+
+    if (reportedMediaHashBankId == null) {
+      throw new Error('Organization does not have a reported media hash bank');
+    }
+
+    const bank = await this.hmaService.getBankById(
+      orgId,
+      reportedMediaHashBankId,
+    );
+
+    if (bank == null) {
+      throw new Error('Reported media hash bank was not found');
+    }
+
+    const results = await Promise.allSettled(
+      reportedMedia.map(async (media) => {
+        const addWithRetries = withRetries(
+          {
+            maxRetries: 5,
+            initialTimeMsBetweenRetries: 5,
+            maxTimeMsBetweenRetries: 500,
+            jitter: true,
+          },
+          async () =>
+            this.hmaService.addContentToBank(bank.hma_name, {
+              url: media.url,
+              metadata: {
+                content_id: `${media.typeId}:${media.id}`,
+                json: {
+                  source: 'ncmec_report',
+                  orgId,
+                  ncmecReportId: reportId,
+                  itemId: media.id,
+                  itemTypeId: media.typeId,
+                },
+              },
+            }),
+        );
+
+        await addWithRetries();
+      }),
+    );
+
+    const failure = results.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+
+    if (failure) {
+      throw failure.reason;
+    }
+  }
+
   async ncmecPreservationEndpoint(orgId: string): Promise<string | undefined> {
     const rows = await this.pgQuery
       .selectFrom('ncmec_reporting.ncmec_org_settings')
@@ -1742,6 +1800,15 @@ export default class NcmecReporting {
       .where('org_id', '=', orgId)
       .executeTakeFirst();
     return rows?.ncmec_additional_info_endpoint;
+  }
+
+  async reportedMediaHashBankId(orgId: string): Promise<number | undefined> {
+    const rows = await this.pgQuery
+      .selectFrom('ncmec_reporting.ncmec_org_settings')
+      .select(['reported_media_hash_bank_id'])
+      .where('org_id', '=', orgId)
+      .executeTakeFirst();
+    return rows?.reported_media_hash_bank_id ?? undefined;
   }
 
   async getUserHasExistingNcmeReport(params: {
@@ -1969,6 +2036,7 @@ export default class NcmecReporting {
           // 3. #uploadAdditionalFile
           // 4. #finish
           // 5. #sendUserPreservationRequest
+          // 6. #addReportedMediaToHashBank
           // we should error and mark the span as failed if any single
           // call fails.
           // These 3 functions utilize #sendCyberTipRequest, which retries
@@ -2060,20 +2128,6 @@ export default class NcmecReporting {
             })
             .execute();
 
-          const reportedMediaHashBankId =
-            ncmecConfig?.reported_media_hash_bank_id;
-          if (isTest === false && reportedMediaHashBankId != null) {
-            await addReportedMediaToHashBank(
-              { hmaService: this.hmaService, logError: logErrorJson },
-              {
-                orgId: reportParams.orgId,
-                bankId: reportedMediaHashBankId,
-                ncmecReportId: reportId,
-                media: reportParams.media,
-              },
-            );
-          }
-
           if (ncmecConfig?.ncmec_preservation_endpoint && isTest === false) {
             await this.#sendUserPreservationRequest({
               orgId: reportParams.orgId,
@@ -2086,6 +2140,18 @@ export default class NcmecReporting {
                 typeId: media.typeId,
               })),
               reportId: parseInt(reportId),
+            });
+          }
+
+          if (
+            ncmecConfig?.reported_media_hash_bank_id != null &&
+            reportParams.media.length > 0 &&
+            isTest === false
+          ) {
+            await this.#addReportedMediaToHashBank({
+              orgId: reportParams.orgId,
+              reportedMedia: reportParams.media,
+              reportId,
             });
           }
           return 'SUCCESS';
