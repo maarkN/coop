@@ -5025,7 +5025,6 @@ export type GQLUser = {
   readonly notifications: GQLUserNotifications;
   readonly orgId: Scalars['ID']['output'];
   readonly permissions: ReadonlyArray<GQLUserPermission>;
-  readonly readMeJWT?: Maybe<Scalars['String']['output']>;
   readonly rejectedByAdmin?: Maybe<Scalars['Boolean']['output']>;
   readonly reviewableQueues: ReadonlyArray<GQLManualReviewQueue>;
   readonly role?: Maybe<GQLUserRole>;

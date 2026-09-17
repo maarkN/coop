@@ -5093,7 +5093,6 @@ export type GQLUser = {
   readonly notifications: GQLUserNotifications;
   readonly orgId: Scalars['ID']['output'];
   readonly permissions: ReadonlyArray<GQLUserPermission>;
-  readonly readMeJWT?: Maybe<Scalars['String']['output']>;
   readonly rejectedByAdmin?: Maybe<Scalars['Boolean']['output']>;
   readonly reviewableQueues: ReadonlyArray<GQLManualReviewQueue>;
   readonly role?: Maybe<GQLUserRole>;
@@ -14688,11 +14687,6 @@ export type GQLUserResolvers<
   orgId?: Resolver<GQLResolversTypes['ID'], ParentType, ContextType>;
   permissions?: Resolver<
     ReadonlyArray<GQLResolversTypes['UserPermission']>,
-    ParentType,
-    ContextType
-  >;
-  readMeJWT?: Resolver<
-    Maybe<GQLResolversTypes['String']>,
     ParentType,
     ContextType
   >;
