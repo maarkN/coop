@@ -1,4 +1,3 @@
-import { type HmaService } from '../../services/hmaService/index.js';
 import { userInputError } from '../utils/errors.js';
 
 /** Input shape for updateNcmecOrgSettings; mirrors NcmecOrgSettingsInput so the
@@ -102,14 +101,11 @@ export function parseMediaReviewPolicy(input: NcmecOrgSettingsInputShape): {
   return { mediaReviewRequirement: requirement, minMediaToReview };
 }
 
-/** Returns the bank id to store, or null to clear it. A bank that is missing
- * and a bank owned by another org get the same error, so callers cannot probe
- * other orgs' bank ids. */
-export async function parseReportedMediaHashBankId(
+/** Returns the bank id to store, or null to clear it. Only checks the format;
+ * the resolver checks that the bank belongs to the org. */
+export function parseReportedMediaHashBankId(
   input: NcmecOrgSettingsInputShape,
-  orgId: string,
-  hmaService: Pick<HmaService, 'getBankById'>,
-): Promise<number | null> {
+): number | null {
   const raw = input.reportedMediaHashBankId?.trim() ?? '';
   if (raw === '') {
     return null;
@@ -118,9 +114,6 @@ export async function parseReportedMediaHashBankId(
     throw userInputError('reportedMediaHashBankId must be a hash bank ID.');
   }
   const bankId = Number(raw);
-  const bank = await hmaService.getBankById(orgId, bankId);
-  if (!bank) {
-    throw userInputError('Selected hash bank was not found.');
-  }
+
   return bankId;
 }

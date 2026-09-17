@@ -352,11 +352,18 @@ const Mutation: GQLMutationResolvers = {
     const { mediaReviewRequirement, minMediaToReview } =
       parseMediaReviewPolicy(input);
 
-    const reportedMediaHashBankId = await parseReportedMediaHashBankId(
-      input,
-      user.orgId,
-      context.services.HMAHashBankService,
-    );
+    const reportedMediaHashBankId = parseReportedMediaHashBankId(input);
+
+    if (reportedMediaHashBankId !== null) {
+      const bank = await context.services.HMAHashBankService.getBankById(
+        user.orgId,
+        reportedMediaHashBankId,
+      );
+
+      if (!bank) {
+        throw userInputError('Selected hash bank was not found.');
+      }
+    }
 
     await context.services.NcmecService.updateNcmecOrgSettings({
       orgId: user.orgId,

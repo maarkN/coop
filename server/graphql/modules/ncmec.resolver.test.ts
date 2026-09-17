@@ -203,6 +203,21 @@ describe('updateNcmecOrgSettings reported media hash bank', () => {
     expect(updateNcmecOrgSettings).not.toHaveBeenCalled();
   });
 
+  it('rejects bank id 0 as not found', async () => {
+    const { ctx, updateNcmecOrgSettings, getBankById } = makeCtx([
+      UserPermission.MANAGE_ORG,
+    ]);
+    await expect(
+      Mutation.updateNcmecOrgSettings(
+        {},
+        { input: { ...VALID_INPUT, reportedMediaHashBankId: '0' } },
+        ctx,
+      ),
+    ).rejects.toThrow('Selected hash bank was not found.');
+    expect(getBankById).toHaveBeenCalledWith('org-1', 0);
+    expect(updateNcmecOrgSettings).not.toHaveBeenCalled();
+  });
+
   it('rejects a non-numeric bank id', async () => {
     const { ctx, updateNcmecOrgSettings, getBankById } = makeCtx([
       UserPermission.MANAGE_ORG,
