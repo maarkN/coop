@@ -178,13 +178,10 @@ describe('updateNcmecOrgSettings reported media hash bank', () => {
     );
   });
 
-  it('rejects a bank from another org and a missing bank with the same message', async () => {
+  it('looks the bank up only within the user org, so a bank from another org reads as missing', async () => {
     const { ctx, updateNcmecOrgSettings, getBankById } = makeCtx([
       UserPermission.MANAGE_ORG,
     ]);
-    getBankById.mockImplementation(async (orgId: string, id: number) =>
-      orgId === 'org-2' && id === 7 ? { id: 7, org_id: 'org-2' } : null,
-    );
     const errorFor = async (id: string) =>
       Mutation.updateNcmecOrgSettings(
         {},
@@ -195,11 +192,15 @@ describe('updateNcmecOrgSettings reported media hash bank', () => {
         (e: Error) => e.message,
       );
 
-    const otherOrgMessage = await errorFor('7');
-    const missingMessage = await errorFor('999');
+    const otherOrgBankMessage = await errorFor('7');
+    const missingBankMessage = await errorFor('999');
 
-    expect(otherOrgMessage).toBeDefined();
-    expect(otherOrgMessage).toBe(missingMessage);
+    expect(getBankById.mock.calls).toEqual([
+      ['org-1', 7],
+      ['org-1', 999],
+    ]);
+    expect(otherOrgBankMessage).toBe('Selected hash bank was not found.');
+    expect(missingBankMessage).toBe(otherOrgBankMessage);
     expect(updateNcmecOrgSettings).not.toHaveBeenCalled();
   });
 
@@ -215,6 +216,21 @@ describe('updateNcmecOrgSettings reported media hash bank', () => {
       ),
     ).rejects.toThrow('Selected hash bank was not found.');
     expect(getBankById).toHaveBeenCalledWith('org-1', 0);
+    expect(updateNcmecOrgSettings).not.toHaveBeenCalled();
+  });
+
+  it('rejects a bank id above the Postgres integer range before looking it up', async () => {
+    const { ctx, updateNcmecOrgSettings, getBankById } = makeCtx([
+      UserPermission.MANAGE_ORG,
+    ]);
+    await expect(
+      Mutation.updateNcmecOrgSettings(
+        {},
+        { input: { ...VALID_INPUT, reportedMediaHashBankId: '2147483648' } },
+        ctx,
+      ),
+    ).rejects.toThrow('reportedMediaHashBankId must be a hash bank ID.');
+    expect(getBankById).not.toHaveBeenCalled();
     expect(updateNcmecOrgSettings).not.toHaveBeenCalled();
   });
 

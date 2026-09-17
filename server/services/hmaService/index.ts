@@ -805,17 +805,13 @@ export class HmaService {
       note?: string;
     },
   ): Promise<BankContentResponse> {
-    const { file, contentType, url, metadata, note } = options;
+    const { file, contentType, url, metadata } = options;
+    const note = toHmaNote(options.note);
 
     if (!url && (!file || !contentType)) {
       throw new Error(
         'Either url or (file + contentType) must be provided to addContentToBank',
       );
-    }
-
-    // HMA counts code points (Python len), not UTF-16 units.
-    if (note && [...note].length > 255) {
-      throw new Error('note must be 255 characters or less');
     }
 
     let response;
@@ -957,6 +953,17 @@ export class HmaService {
     );
     return result.matched;
   }
+}
+
+function toHmaNote(note: string | undefined): string | undefined {
+  if (!note?.trim()) {
+    return undefined;
+  }
+  // HMA counts code points (Python len), not UTF-16 units.
+  if ([...note].length > 255) {
+    throw new Error('note must be 255 characters or less');
+  }
+  return note;
 }
 
 export default inject(['fetchHTTP', 'KyselyPg'], HmaService);

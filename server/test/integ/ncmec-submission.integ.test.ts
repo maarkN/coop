@@ -51,7 +51,7 @@ function makeReporting(
 function reportWithTwoMedia(
   orgId: string,
   userItemTypeId: string,
-): NCMECReportParams {
+): NCMECReportParams & { jobId: string } {
   return {
     orgId,
     reviewerId: 'reviewer-1',
@@ -238,21 +238,27 @@ describe('NCMEC submitReport (integration)', () => {
           ),
         ).toBe(true);
       }
-      expect(
-        addCalls.map((c) => new URL(c.url).searchParams.get('url')).sort(),
-      ).toEqual([SECOND_MEDIA_URL, MEDIA_URL].sort());
-      const bodies = addCalls.map((c) => jsonParse(c.body as JsonOf<unknown>));
-      expect(bodies).toContainEqual({
+      const bodyByMediaUrl = Object.fromEntries(
+        addCalls.map((c) => [
+          new URL(c.url).searchParams.get('url'),
+          jsonParse(c.body as JsonOf<unknown>),
+        ]),
+      );
+      const expectedBody = (itemId: string) => ({
         metadata: {
-          content_id: `${userItemTypeId}:media-1`,
+          content_id: `${userItemTypeId}:${itemId}`,
           json: {
             source: 'ncmec_report',
             orgId,
             ncmecReportId: reportId,
-            itemId: 'media-1',
+            itemId,
             itemTypeId: userItemTypeId,
           },
         },
+      });
+      expect(bodyByMediaUrl).toEqual({
+        [MEDIA_URL]: expectedBody('media-1'),
+        [SECOND_MEDIA_URL]: expectedBody('media-2'),
       });
     },
     60_000,
@@ -309,9 +315,12 @@ describe('NCMEC submitReport (integration)', () => {
         'ncmec_reporting.ncmec_reports_errors',
       )
         .selectAll()
-        .where('job_id', '=', params.jobId!)
+        .where('job_id', '=', params.jobId)
         .executeTakeFirst();
       expect(errorRow?.status).toBe('RETRYABLE_ERROR');
+      expect(errorRow?.last_error).toContain(
+        'adding its media to the hash bank failed',
+      );
       expect(errorRow?.last_error).not.toContain('cdn.example');
     },
     60_000,

@@ -1778,7 +1778,11 @@ export default class NcmecReporting {
     );
 
     if (failure) {
-      throw failure.reason;
+      const reason =
+        failure.reason instanceof Error
+          ? failure.reason.message
+          : String(failure.reason);
+      throw new Error(`Failed to add reported media to hash bank: ${reason}`);
     }
   }
 

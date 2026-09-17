@@ -113,7 +113,12 @@ export function parseReportedMediaHashBankId(
   if (!/^\d+$/.test(raw)) {
     throw userInputError('reportedMediaHashBankId must be a hash bank ID.');
   }
+
   const bankId = Number(raw);
+
+  if (!Number.isSafeInteger(bankId) || bankId > 2_147_483_647) {
+    throw userInputError('reportedMediaHashBankId must be a hash bank ID.');
+  }
 
   return bankId;
 }

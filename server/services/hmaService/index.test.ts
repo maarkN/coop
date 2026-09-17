@@ -491,6 +491,33 @@ describe('HmaService', () => {
         });
       });
 
+      it('does not send a note with only whitespace', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+
+        await svc.addContentToBank('COOP_ORG1_BANK', {
+          ...URL_OPTIONS,
+          metadata: { content_id: 'type1:item1' },
+          note: '   ',
+        });
+
+        expect(jsonParse(fetchHTTP.mock.calls[0][0].body)).toEqual({
+          metadata: { content_id: 'type1:item1' },
+        });
+      });
+
+      it('does not append a note with only whitespace on file uploads', async () => {
+        const { fetchHTTP, svc } = makeOkService();
+
+        await svc.addContentToBank('COOP_ORG1_BANK', {
+          file: new Blob(['bytes'], { type: 'image/png' }),
+          contentType: 'photo',
+          note: ' \n\t ',
+        });
+
+        const form = fetchHTTP.mock.calls[0][0].body as FormData;
+        expect(form.has('note')).toBe(false);
+      });
+
       it('accepts a note with exactly 255 characters', async () => {
         const { fetchHTTP, svc } = makeOkService();
         const note = 'a'.repeat(255);
