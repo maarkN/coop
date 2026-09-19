@@ -1,9 +1,7 @@
 import { uid } from 'uid';
 
-import {
-  HashBankService,
-  HmaService,
-} from '../../services/hmaService/index.js';
+import { type ReportedMediaBankingEnqueueFn } from '../../queues/reportedMediaBankingQueue.js';
+import { HashBankService } from '../../services/hmaService/index.js';
 import {
   NCMECFileAnnotation,
   NCMECIncidentType,
@@ -16,12 +14,8 @@ import {
   type FetchHTTP,
   type HandleResponseBody,
 } from '../../services/networkingService/index.js';
-import { jsonParse, type JsonOf } from '../../utils/encoding.js';
 import createOrg from '../fixtureHelpers/createOrg.js';
-import {
-  makeStubFetchHTTP,
-  type RecordedFetchHTTPCall,
-} from '../fixtureHelpers/makeStubFetchHTTP.js';
+import { makeStubFetchHTTP } from '../fixtureHelpers/makeStubFetchHTTP.js';
 import { makeTransactionalTestWithFixture } from '../harness/transactionalTest.js';
 import { type MockedServer } from '../setupMockedServer.js';
 
@@ -34,12 +28,11 @@ type Deps = MockedServer['deps'];
 function makeReporting(
   deps: Deps,
   reportId: string,
-  stubOpts: { hmaAddContentStatus?: number } = {},
   onRequest?: (url: string) => Promise<void>,
+  reportedMediaBankingEnqueue: ReportedMediaBankingEnqueueFn = jest.fn(),
 ) {
   const stub = makeStubFetchHTTP(reportId, 'f1', {
     preservationUrl: PRESERVATION_URL,
-    ...stubOpts,
   });
   const fetchHTTP: FetchHTTP = async <T extends HandleResponseBody>(
     query: CoopRequestQuery<T>,
@@ -55,9 +48,9 @@ function makeReporting(
     deps.ModerationConfigService,
     deps.getItemTypeEventuallyConsistent,
     deps.Tracer,
-    new HmaService(fetchHTTP, deps.KyselyPg),
+    reportedMediaBankingEnqueue,
   );
-  return { stub, ncmecReporting };
+  return { stub, ncmecReporting, reportedMediaBankingEnqueue };
 }
 
 function reportWithTwoMedia(
@@ -83,12 +76,6 @@ function reportWithTwoMedia(
       ],
     jobId: `job-${uid()}`,
   };
-}
-
-function hmaAddContentCalls(calls: readonly RecordedFetchHTTPCall[]) {
-  return calls.filter(
-    (c) => c.method === 'post' && /\/c\/bank\/[^/]+\/content\?/.test(c.url),
-  );
 }
 
 describe('NCMEC submitReport (integration)', () => {
@@ -134,13 +121,17 @@ describe('NCMEC submitReport (integration)', () => {
       reportedMediaHashBankId: hashBank.id,
     });
 
-    const { stub, ncmecReporting } = makeReporting(deps, reportId);
+    const { stub, ncmecReporting, reportedMediaBankingEnqueue } = makeReporting(
+      deps,
+      reportId,
+    );
 
     return {
       orgId,
       reportId,
       stub,
       ncmecReporting,
+      reportedMediaBankingEnqueue,
       hashBank,
       userItemTypeId: orgFixture.defaultUserItemType.id,
     };
@@ -227,51 +218,34 @@ describe('NCMEC submitReport (integration)', () => {
     60_000,
   );
   testWithFixture(
-    'adds every reported media item to the selected hash bank once a production report is accepted',
+    'enqueues one banking job per reported media item once a production report is accepted',
     async ({
       ncmecReporting,
+      reportedMediaBankingEnqueue,
       orgId,
       reportId,
-      stub,
       hashBank,
       userItemTypeId,
     }) => {
-      const params = reportWithTwoMedia(orgId, userItemTypeId);
-
-      const result = await ncmecReporting.submitReport(params, false);
+      const result = await ncmecReporting.submitReport(
+        reportWithTwoMedia(orgId, userItemTypeId),
+        false,
+      );
 
       expect(result).toBe('SUCCESS');
-      const addCalls = hmaAddContentCalls(stub.calls);
-      expect(addCalls).toHaveLength(2);
-      for (const call of addCalls) {
-        expect(
-          new URL(call.url).pathname.endsWith(
-            `/c/bank/${hashBank.hma_name}/content`,
-          ),
-        ).toBe(true);
-      }
-      const bodyByMediaUrl = Object.fromEntries(
-        addCalls.map((c) => [
-          new URL(c.url).searchParams.get('url'),
-          jsonParse(c.body as JsonOf<unknown>),
-        ]),
-      );
-      const expectedBody = (itemId: string) => ({
-        metadata: {
-          content_id: `${userItemTypeId}:${itemId}`,
-          json: {
-            source: 'ncmec_report',
-            orgId,
-            ncmecReportId: reportId,
-            itemId,
-            itemTypeId: userItemTypeId,
-          },
-        },
+      const job = (itemId: string, url: string) => ({
+        orgId,
+        hashBankId: hashBank.id,
+        ncmecReportId: reportId,
+        itemId,
+        itemTypeId: userItemTypeId,
+        url,
       });
-      expect(bodyByMediaUrl).toEqual({
-        [MEDIA_URL]: expectedBody('media-1'),
-        [SECOND_MEDIA_URL]: expectedBody('media-2'),
-      });
+      expect(reportedMediaBankingEnqueue).toHaveBeenCalledTimes(1);
+      expect(reportedMediaBankingEnqueue).toHaveBeenCalledWith([
+        job('media-1', MEDIA_URL),
+        job('media-2', SECOND_MEDIA_URL),
+      ]);
     },
     60_000,
   );
@@ -279,10 +253,9 @@ describe('NCMEC submitReport (integration)', () => {
   testWithFixture(
     'uses the bank read before submitting, even if the setting is cleared during submission',
     async ({ deps, orgId, reportId, hashBank, userItemTypeId }) => {
-      const { stub, ncmecReporting } = makeReporting(
+      const { ncmecReporting, reportedMediaBankingEnqueue } = makeReporting(
         deps,
         reportId,
-        {},
         async (url) => {
           if (url.endsWith('/ispws/submit')) {
             await deps.KyselyPg.updateTable(
@@ -301,22 +274,24 @@ describe('NCMEC submitReport (integration)', () => {
       );
 
       expect(result).toBe('SUCCESS');
-      const addCalls = hmaAddContentCalls(stub.calls);
-      expect(addCalls).toHaveLength(2);
-      for (const call of addCalls) {
-        expect(
-          new URL(call.url).pathname.endsWith(
-            `/c/bank/${hashBank.hma_name}/content`,
-          ),
-        ).toBe(true);
-      }
+      expect(reportedMediaBankingEnqueue).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ hashBankId: hashBank.id }),
+        ]),
+      );
     },
     60_000,
   );
 
   testWithFixture(
-    'does not add anything to a hash bank when the org has no bank selected',
-    async ({ deps, ncmecReporting, orgId, stub, userItemTypeId }) => {
+    'enqueues nothing when the org has no bank selected',
+    async ({
+      deps,
+      ncmecReporting,
+      reportedMediaBankingEnqueue,
+      orgId,
+      userItemTypeId,
+    }) => {
       await deps.KyselyPg.updateTable('ncmec_reporting.ncmec_org_settings')
         .set({ reported_media_hash_bank_id: null })
         .where('org_id', '=', orgId)
@@ -328,38 +303,44 @@ describe('NCMEC submitReport (integration)', () => {
       );
 
       expect(result).toBe('SUCCESS');
-      expect(stub.calls.some((c) => c.url.includes('/c/bank/'))).toBe(false);
+      expect(reportedMediaBankingEnqueue).not.toHaveBeenCalled();
     },
     60_000,
   );
 
   testWithFixture(
-    'does not add anything to the hash bank for a test submission',
-    async ({ ncmecReporting, orgId, stub, userItemTypeId }) => {
+    'enqueues nothing for a test submission',
+    async ({
+      ncmecReporting,
+      reportedMediaBankingEnqueue,
+      orgId,
+      userItemTypeId,
+    }) => {
       const result = await ncmecReporting.submitReport(
         reportWithTwoMedia(orgId, userItemTypeId),
         true,
       );
 
       expect(result).toBe('SUCCESS');
-      expect(hmaAddContentCalls(stub.calls)).toHaveLength(0);
+      expect(reportedMediaBankingEnqueue).not.toHaveBeenCalled();
     },
     60_000,
   );
 
   testWithFixture(
-    'fails the report after retrying when HMA keeps rejecting the content',
+    'keeps the report successful when the banking jobs cannot be enqueued',
     async ({ deps, orgId, reportId, userItemTypeId }) => {
-      const { stub, ncmecReporting } = makeReporting(deps, reportId, {
-        hmaAddContentStatus: 500,
-      });
+      const { stub, ncmecReporting } = makeReporting(
+        deps,
+        reportId,
+        undefined,
+        jest.fn().mockRejectedValue(new Error('Redis is down')),
+      );
       const params = reportWithTwoMedia(orgId, userItemTypeId);
 
       const result = await ncmecReporting.submitReport(params, false);
 
-      expect(result).toBe('FAILURE');
-      // 2 media x (1 attempt + 5 retries)
-      expect(hmaAddContentCalls(stub.calls)).toHaveLength(12);
+      expect(result).toBe('SUCCESS');
       expect(stub.calls.some((c) => c.url === PRESERVATION_URL)).toBe(true);
       const errorRow = await deps.KyselyPg.selectFrom(
         'ncmec_reporting.ncmec_reports_errors',
@@ -367,11 +348,7 @@ describe('NCMEC submitReport (integration)', () => {
         .selectAll()
         .where('job_id', '=', params.jobId)
         .executeTakeFirst();
-      expect(errorRow?.status).toBe('RETRYABLE_ERROR');
-      expect(errorRow?.last_error).toContain(
-        'adding its media to the hash bank failed',
-      );
-      expect(errorRow?.last_error).not.toContain('cdn.example');
+      expect(errorRow).toBeUndefined();
     },
     60_000,
   );

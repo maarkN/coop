@@ -11,8 +11,6 @@ const REVIEWER_ERROR_MESSAGES = {
   VALIDATION: 'Report failed validation before submission.',
   CONFIG: 'NCMEC configuration is incomplete. Check Settings → NCMEC.',
   MEDIA: 'Could not assemble the reported media for submission.',
-  HASH_BANK:
-    'NCMEC accepted the report, but adding its media to the hash bank failed. Check the bank in Settings → NCMEC.',
   UNKNOWN: 'Unexpected error submitting to NCMEC. See server logs.',
 } as const;
 
@@ -50,11 +48,6 @@ const REVIEWER_PREFIX_RULES: readonly {
     category: 'REJECTED',
   },
   { prefix: 'NCMEC report finish failed', category: 'SERVER' },
-  {
-    prefix: 'Failed to add reported media to hash bank',
-    category: 'HASH_BANK',
-  },
-  { prefix: 'Reported media hash bank was not found', category: 'HASH_BANK' },
 ];
 
 function classifyByHttpStatus(status: number | undefined): string {

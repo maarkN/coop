@@ -3,6 +3,7 @@ import _Ajv from 'ajv-draft-04';
 import { sql, type Kysely } from 'kysely';
 
 import { inject, type Dependencies } from '../../iocContainer/index.js';
+import { type ReportedMediaBankingEnqueueFn } from '../../queues/reportedMediaBankingQueue.js';
 import { type ActionExecutionCorrelationId } from '../analyticsLoggers/ActionExecutionLogger.js';
 import { type RuleExecutionCorrelationId } from '../analyticsLoggers/ruleExecutionLoggingUtils.js';
 import { type ItemSubmissionWithTypeIdentifier } from '../itemProcessingService/makeItemSubmissionWithTypeIdentifier.js';
@@ -38,7 +39,7 @@ export class NcmecService {
     readonly tracer: Dependencies['Tracer'],
     readonly itemInvestigationService: Dependencies['ItemInvestigationService'],
     readonly getItemTypeEventuallyConsistent: Dependencies['getItemTypeEventuallyConsistent'],
-    readonly hmaService: Dependencies['HMAHashBankService'],
+    readonly reportedMediaBankingEnqueue: ReportedMediaBankingEnqueueFn,
   ) {
     this.ncmecReporting = new NcmecReporting(
       pgQuery,
@@ -48,7 +49,7 @@ export class NcmecService {
       moderationConfigService,
       getItemTypeEventuallyConsistent,
       tracer,
-      hmaService,
+      reportedMediaBankingEnqueue,
     );
     this.ncmecEnqueueToMrt = new NcmecEnqueueToMrt(
       partialItemsService,
@@ -337,7 +338,7 @@ export default inject(
     'Tracer',
     'ItemInvestigationService',
     'getItemTypeEventuallyConsistent',
-    'HMAHashBankService',
+    'reportedMediaBankingEnqueue',
   ],
   NcmecService,
 );

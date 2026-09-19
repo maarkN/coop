@@ -8,6 +8,7 @@ import { FormData } from 'undici';
 import { js2xml } from 'xml-js';
 
 import { type Dependencies } from '../../iocContainer/index.js';
+import { type ReportedMediaBankingEnqueueFn } from '../../queues/reportedMediaBankingQueue.js';
 import { jsonStringify } from '../../utils/encoding.js';
 import { type JSONSchemaV4 } from '../../utils/json-schema-types.js';
 import { type FixKyselyRowCorrelation } from '../../utils/kysely.js';
@@ -1391,7 +1392,7 @@ export default class NcmecReporting {
     private moderationConfigService: Dependencies['ModerationConfigService'],
     private getItemTypeEventuallyConsistent: Dependencies['getItemTypeEventuallyConsistent'],
     private readonly tracer: Dependencies['Tracer'],
-    private readonly hmaService: Dependencies['HMAHashBankService'],
+    private readonly reportedMediaBankingEnqueue: ReportedMediaBankingEnqueueFn,
   ) {}
   async hasNCMECReportingEnabled(orgId: string) {
     const ncmecOrgSettings = await this.pgQuery
@@ -1723,65 +1724,6 @@ export default class NcmecReporting {
     await fetchWithRetries();
   }
 
-  async #addReportedMediaToHashBank(input: {
-    orgId: string;
-    reportedMedia: ReadonlyArray<Pick<Media, 'id' | 'typeId' | 'url'>>;
-    reportId: string;
-    reportedMediaHashBankId: number;
-  }) {
-    const { orgId, reportedMedia, reportId, reportedMediaHashBankId } = input;
-
-    const bank = await this.hmaService.getBankById(
-      orgId,
-      reportedMediaHashBankId,
-    );
-
-    if (bank == null) {
-      throw new Error('Reported media hash bank was not found');
-    }
-
-    const results = await Promise.allSettled(
-      reportedMedia.map(async (media) => {
-        const addWithRetries = withRetries(
-          {
-            maxRetries: 5,
-            initialTimeMsBetweenRetries: 5,
-            maxTimeMsBetweenRetries: 500,
-            jitter: true,
-          },
-          async () =>
-            this.hmaService.addContentToBank(bank.hma_name, {
-              url: media.url,
-              metadata: {
-                content_id: `${media.typeId}:${media.id}`,
-                json: {
-                  source: 'ncmec_report',
-                  orgId,
-                  ncmecReportId: reportId,
-                  itemId: media.id,
-                  itemTypeId: media.typeId,
-                },
-              },
-            }),
-        );
-
-        await addWithRetries();
-      }),
-    );
-
-    const failure = results.find(
-      (result): result is PromiseRejectedResult => result.status === 'rejected',
-    );
-
-    if (failure) {
-      const reason =
-        failure.reason instanceof Error
-          ? failure.reason.message
-          : String(failure.reason);
-      throw new Error(`Failed to add reported media to hash bank: ${reason}`);
-    }
-  }
-
   async ncmecPreservationEndpoint(orgId: string): Promise<string | undefined> {
     const rows = await this.pgQuery
       .selectFrom('ncmec_reporting.ncmec_org_settings')
@@ -2027,7 +1969,6 @@ export default class NcmecReporting {
           // 3. #uploadAdditionalFile
           // 4. #finish
           // 5. #sendUserPreservationRequest
-          // 6. #addReportedMediaToHashBank
           // we should error and mark the span as failed if any single
           // call fails.
           // These 3 functions utilize #sendCyberTipRequest, which retries
@@ -2142,12 +2083,31 @@ export default class NcmecReporting {
             reportParams.media.length > 0 &&
             isTest === false
           ) {
-            await this.#addReportedMediaToHashBank({
-              orgId: reportParams.orgId,
-              reportedMedia: reportParams.media,
-              reportId,
-              reportedMediaHashBankId,
-            });
+            // Banking runs in its own worker. Enqueueing must never fail an
+            // accepted report, so a Redis outage is logged and dropped here.
+            try {
+              await this.reportedMediaBankingEnqueue(
+                reportParams.media.map((media) => ({
+                  orgId: reportParams.orgId,
+                  hashBankId: reportedMediaHashBankId,
+                  ncmecReportId: reportId,
+                  itemId: media.id,
+                  itemTypeId: media.typeId,
+                  url: media.url,
+                })),
+              );
+            } catch (e) {
+              // eslint-disable-next-line no-restricted-syntax
+              logErrorJson({
+                error: e,
+                message: jsonStringify({
+                  event: 'ncmecReportedMediaBankingEnqueueFailed',
+                  orgId: reportParams.orgId,
+                  ncmecReportId: reportId,
+                  hashBankId: reportedMediaHashBankId,
+                }),
+              });
+            }
           }
           return 'SUCCESS';
         } catch (e) {

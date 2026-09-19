@@ -49,17 +49,6 @@ describe('summarizeNcmecErrorForReviewer', () => {
     ).toMatch(/failed validation/);
   });
 
-  it('classifies reported media hash bank failures separately from NCMEC errors', () => {
-    for (const message of [
-      'Failed to add reported media to hash bank: Failed to add content to bank: 500',
-      'Reported media hash bank was not found',
-    ]) {
-      expect(summarizeNcmecErrorForReviewer(new Error(message))).toBe(
-        'NCMEC accepted the report, but adding its media to the hash bank failed. Check the bank in Settings → NCMEC.',
-      );
-    }
-  });
-
   it('classifies missing-config throws to a config category', () => {
     expect(
       summarizeNcmecErrorForReviewer(

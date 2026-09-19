@@ -20,21 +20,18 @@ export type RecordedFetchHTTPCall = {
 export function makeStubFetchHTTP(
   reportId: string,
   fileId: string,
-  opts: { preservationUrl?: string; hmaAddContentStatus?: number } = {},
+  opts: { preservationUrl?: string } = {},
 ): {
   fetchHTTP: FetchHTTP;
   calls: RecordedFetchHTTPCall[];
 } {
   const calls: RecordedFetchHTTPCall[] = [];
   const preservationUrl = opts.preservationUrl;
-  const ok = <T extends HandleResponseBody>(
-    body: unknown,
-    status = 200,
-  ): CoopResponse<T> =>
+  const ok = <T extends HandleResponseBody>(body: unknown): CoopResponse<T> =>
     // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- the stub returns a canned body through a slot typed by the caller's T.
     ({
-      status,
-      ok: status >= 200 && status < 300,
+      status: 200,
+      ok: true,
       headers: new Headers(),
       body,
     }) as CoopResponse<T>;
@@ -84,13 +81,6 @@ export function makeStubFetchHTTP(
     }
     if (preservationUrl != null && url === preservationUrl) {
       return ok<T>(undefined);
-    }
-    // HMA add-content; GET /c/bank/<name> is covered by the media download branch.
-    if (method === 'post' && /\/c\/bank\/[^/]+\/content\?/.test(url)) {
-      return ok<T>(
-        { id: 1, signals: { pdq: 'stub-pdq' } },
-        opts.hmaAddContentStatus ?? 200,
-      );
     }
     throw new Error(`stub fetchHTTP: unexpected request ${method} ${url}`);
   };
