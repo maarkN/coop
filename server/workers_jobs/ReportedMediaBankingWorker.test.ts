@@ -83,8 +83,15 @@ describe('bankReportedMedia', () => {
         .mockRejectedValue(new Error('Failed to add content to bank: 500')),
     });
 
-    await expect(bankReportedMedia(deps, JOB)).rejects.toThrow(
-      'Failed to add content to bank: 500',
+    const error = await bankReportedMedia(deps, JOB).then(
+      () => null,
+      (e: unknown) => e,
     );
+
+    // An UnrecoverableError carries the same message but stops the retry, so
+    // the type is what this test is about.
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(UnrecoverableError);
+    expect((error as Error).message).toBe('Failed to add content to bank: 500');
   });
 });

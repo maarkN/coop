@@ -12,6 +12,8 @@ import {
   type ReportedMediaBankingJobData,
 } from '../queues/reportedMediaBankingQueue.js';
 import { type HmaService } from '../services/hmaService/index.js';
+import { jsonStringify } from '../utils/encoding.js';
+import { logErrorJson } from '../utils/logging.js';
 import { type Worker } from './index.js';
 
 export interface ReportedMediaBankingDeps {
@@ -57,7 +59,7 @@ export default inject(
     return {
       type: 'Worker' as const,
       async run(_signal) {
-        worker = new BullWorker<ReportedMediaBankingJobData>(
+        const bankingWorker = new BullWorker<ReportedMediaBankingJobData>(
           REPORTED_MEDIA_BANKING_QUEUE_NAME,
           async (job: BullJob<ReportedMediaBankingJobData>) => {
             const processJob = tracer.traced(
@@ -77,11 +79,25 @@ export default inject(
             removeOnFail: { count: 1000 },
           },
         );
+        worker = bankingWorker;
 
-        await worker.waitUntilReady();
+        // An 'error' event with no listener takes the process down, which
+        // would stop banking until the worker is restarted.
+        bankingWorker.on('error', (error) => {
+          // eslint-disable-next-line no-restricted-syntax
+          logErrorJson({
+            error,
+            message: jsonStringify({
+              event: 'reportedMediaBankingWorkerError',
+              queue: REPORTED_MEDIA_BANKING_QUEUE_NAME,
+            }),
+          });
+        });
+
+        await bankingWorker.waitUntilReady();
 
         await new Promise<void>((resolve) => {
-          worker!.on('closed', () => resolve());
+          bankingWorker.on('closed', () => resolve());
         });
       },
       async shutdown() {
