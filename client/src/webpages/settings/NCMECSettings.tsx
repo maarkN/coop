@@ -157,7 +157,7 @@ export default function NCMECSettings() {
           GQLNcmecMediaReviewRequirement.All,
         minMediaToReview: String(data.ncmecOrgSettings.minMediaToReview ?? 1),
         reportedMediaHashBankId:
-          data.ncmecOrgSettings.reportedMediaHashBankId ?? '',
+          data.ncmecOrgSettings.reportedMediaHashBankId?.toString() ?? '',
       });
     }
   }, [data?.ncmecOrgSettings]);
@@ -246,7 +246,9 @@ export default function NCMECSettings() {
           contactPersonPhone: settings.contactPersonPhone || null,
           mediaReviewRequirement: settings.mediaReviewRequirement,
           minMediaToReview: isMinimumPolicy ? parsedMinMedia : null,
-          reportedMediaHashBankId: settings.reportedMediaHashBankId || null,
+          reportedMediaHashBankId: settings.reportedMediaHashBankId
+            ? Number(settings.reportedMediaHashBankId)
+            : null,
         },
       },
     });

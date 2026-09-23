@@ -3153,7 +3153,7 @@ export type GQLNcmecOrgSettings = {
   readonly ncmecAdditionalInfoEndpoint?: Maybe<Scalars['String']['output']>;
   readonly ncmecPreservationEndpoint?: Maybe<Scalars['String']['output']>;
   readonly password: Scalars['String']['output'];
-  readonly reportedMediaHashBankId?: Maybe<Scalars['ID']['output']>;
+  readonly reportedMediaHashBankId?: Maybe<Scalars['Int']['output']>;
   readonly termsOfService?: Maybe<Scalars['String']['output']>;
   readonly username: Scalars['String']['output'];
 };
@@ -3174,7 +3174,7 @@ export type GQLNcmecOrgSettingsInput = {
   readonly ncmecAdditionalInfoEndpoint?: InputMaybe<Scalars['String']['input']>;
   readonly ncmecPreservationEndpoint?: InputMaybe<Scalars['String']['input']>;
   readonly password: Scalars['String']['input'];
-  readonly reportedMediaHashBankId?: InputMaybe<Scalars['ID']['input']>;
+  readonly reportedMediaHashBankId?: InputMaybe<Scalars['Int']['input']>;
   readonly termsOfService?: InputMaybe<Scalars['String']['input']>;
   readonly username: Scalars['String']['input'];
 };
@@ -25067,7 +25067,7 @@ export type GQLNcmecOrgSettingsQuery = {
     readonly contactPersonPhone?: string | null;
     readonly mediaReviewRequirement?: GQLNcmecMediaReviewRequirement | null;
     readonly minMediaToReview?: number | null;
-    readonly reportedMediaHashBankId?: string | null;
+    readonly reportedMediaHashBankId?: number | null;
   } | null;
   readonly hashBanks: ReadonlyArray<{
     readonly __typename: 'HashBank';
