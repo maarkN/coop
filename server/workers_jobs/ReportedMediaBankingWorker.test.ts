@@ -1,4 +1,5 @@
 import { UnrecoverableError } from 'bullmq';
+import { vi } from 'vitest';
 
 import { type ReportedMediaBankingJobData } from '../queues/reportedMediaBankingQueue.js';
 import type { HashBank } from '../services/hmaService/index.js';
@@ -32,8 +33,8 @@ function makeDeps(
 ) {
   const deps = {
     hmaService: {
-      getBankById: jest.fn().mockResolvedValue(BANK),
-      addContentToBank: jest
+      getBankById: vi.fn().mockResolvedValue(BANK),
+      addContentToBank: vi
         .fn()
         .mockResolvedValue({ id: 1, signals: { pdq: 'abc' } }),
       ...overrides,
@@ -68,7 +69,7 @@ describe('bankReportedMedia', () => {
   });
 
   it('stops retrying when the bank is gone', async () => {
-    const deps = makeDeps({ getBankById: jest.fn().mockResolvedValue(null) });
+    const deps = makeDeps({ getBankById: vi.fn().mockResolvedValue(null) });
 
     await expect(bankReportedMedia(deps, JOB)).rejects.toBeInstanceOf(
       UnrecoverableError,
@@ -78,7 +79,7 @@ describe('bankReportedMedia', () => {
 
   it('lets a failed HMA call through, so the queue retries the job', async () => {
     const deps = makeDeps({
-      addContentToBank: jest
+      addContentToBank: vi
         .fn()
         .mockRejectedValue(new Error('Failed to add content to bank: 500')),
     });

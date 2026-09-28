@@ -105,6 +105,11 @@ import {
 } from '../services/apiKeyService/index.js';
 import { type CombinedPg } from '../services/combinedDbTypes.js';
 import {
+  makeContentAccessService,
+  type ContentAccessExtension,
+  type default as ContentAccessService,
+} from '../services/contentAccessService.js';
+import {
   makeDerivedFieldsService,
   type DerivedFieldsService,
 } from '../services/derivedFieldsService/index.js';
@@ -378,6 +383,7 @@ export interface Dependencies {
   NotificationsService: PublicInterface<NotificationsService>;
   PlacesApiService: PlacesApiService;
   ReportingService: ReportingService;
+  ContentAccessService: ContentAccessService;
   ManualReviewContentResolver: ManualReviewContentResolver;
   ManualReviewToolService: ManualReviewToolService;
   SignalsService: SignalsService;
@@ -475,6 +481,7 @@ export function getPgConnectionParams(): pg.ClientConfig {
 export default async function getBottle(
   extensions: {
     manualReviewContentResolver?: ManualReviewContentResolver;
+    contentAccess?: ContentAccessExtension;
   } = {},
 ) {
   // Pool / client tuning shared by both Kysely pools. Defaults preserve our
@@ -944,6 +951,10 @@ export default async function getBottle(
         container.KyselyPgReadReplica,
         async (_) => {},
       ),
+  );
+
+  bottle.factory('ContentAccessService', (container) =>
+    makeContentAccessService(extensions.contentAccess, container.Tracer),
   );
 
   bottle.factory(
@@ -1510,6 +1521,7 @@ export default async function getBottle(
       async (params) =>
         container.NcmecService.getUserHasExistingNcmecReport(params),
       container.ManualReviewContentResolver,
+      container.Meter,
     );
   });
 

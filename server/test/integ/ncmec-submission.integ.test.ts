@@ -1,4 +1,5 @@
 import { uid } from 'uid';
+import { vi } from 'vitest';
 
 import { type ReportedMediaBankingEnqueueFn } from '../../queues/reportedMediaBankingQueue.js';
 import { HashBankService } from '../../services/hmaService/index.js';
@@ -29,7 +30,7 @@ function makeReporting(
   deps: Deps,
   reportId: string,
   onRequest?: (url: string) => Promise<void>,
-  reportedMediaBankingEnqueue: ReportedMediaBankingEnqueueFn = jest.fn(),
+  reportedMediaBankingEnqueue: ReportedMediaBankingEnqueueFn = vi.fn(),
 ) {
   const stub = makeStubFetchHTTP(reportId, 'f1', {
     preservationUrl: PRESERVATION_URL,
@@ -335,7 +336,7 @@ describe('NCMEC submitReport (integration)', () => {
           deps,
           reportId,
           undefined,
-          jest.fn().mockRejectedValue(new Error('Redis is down')),
+          vi.fn().mockRejectedValue(new Error('Redis is down')),
         );
       const params = reportWithTwoMedia(orgId, userItemTypeId);
 
